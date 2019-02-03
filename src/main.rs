@@ -376,7 +376,7 @@ impl Camera {
 fn color<T>(r: Ray, world: &T, depth: u32, rng: &mut ThreadRng) -> Vec3 where T: Hitable {
     if let Some(hit) = &world.hit(r, 0.001, f64::MAX) {
         let (attenuation, scattered, b) = hit.material.scatter(r, hit, rng);
-        if depth < 50 && b {
+        if depth < 10 && b {
             return attenuation * color(scattered, world, depth + 1, rng);
         } else {
             return Vec3::new(0.0, 0.0, 0.0);
@@ -388,15 +388,111 @@ fn color<T>(r: Ray, world: &T, depth: u32, rng: &mut ThreadRng) -> Vec3 where T:
     }
 }
 
+fn gen64(rng: &mut ThreadRng) -> f64 {
+    let r: f64 = rng.gen();
+    r
+}
+
+fn random_sceme() -> HitableList {
+    let n = 500;
+    let mut hitables: Vec<Box<Hitable>> = vec![
+        Box::new(Sphere::new(
+            Vec3::new(0.0, -1000.0, 0.0),
+            1000.0,
+            Material::Lambertian{
+                albedo: Vec3::new(0.5, 0.5, 0.5),
+            },
+        )),
+    ];
+
+    let mut rng = rand::thread_rng();
+
+    for a in -11..11 {
+        for b in -11..11 {
+            let choose_mat: f64 = rng.gen();
+            let center = Vec3::new(
+                a as f64 + 0.9 + gen64(&mut rng),
+                0.2,
+                b as f64 + 0.9 * gen64(&mut rng),
+            );
+
+            if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
+                // diffuse
+                hitables.push(Box::new(Sphere::new(
+                    center,
+                    0.2,
+                    Material::Lambertian{
+                        albedo: Vec3::new(
+                            gen64(&mut rng) * gen64(&mut rng),
+                            gen64(&mut rng) * gen64(&mut rng),
+                            gen64(&mut rng) * gen64(&mut rng),
+                        ),
+                    },
+                )));
+            } else if choose_mat < 0.95 {
+                // metal
+                hitables.push(Box::new(Sphere::new(
+                    center,
+                    0.2,
+                    Material::Metal{
+                        albedo: Vec3::new(
+                            0.5 * (1.0 + gen64(&mut rng)),
+                            0.5 * (1.0 + gen64(&mut rng)),
+                            0.5 * (1.0 + gen64(&mut rng)),
+                        ),
+                        fuzz: 0.5 * gen64(&mut rng),
+                    },
+                )));
+            } else {
+                // glass
+                hitables.push(Box::new(Sphere::new(
+                    center,
+                    0.2,
+                    Material::Dielectrict{
+                        ref_idx: 1.5,
+                    },
+                )));
+            }
+        }
+    }
+
+
+    hitables.push(Box::new(Sphere::new(
+        Vec3::new(0.0, 1.0, 0.0),
+        1.0,
+        Material::Dielectrict{ref_idx: 1.5,},
+    )));
+
+
+    hitables.push(Box::new(Sphere::new(
+        Vec3::new(-4.0, 1.0, 0.0),
+        1.0,
+        Material::Lambertian{
+            albedo: Vec3::new(0.4, 0.2, 0.1),
+        },
+    )));
+
+    hitables.push(Box::new(Sphere::new(
+        Vec3::new(4.0, 1.0, 0.0),
+        1.0,
+        Material::Metal{
+            albedo: Vec3::new(0.7, 0.6, 0.5),
+            fuzz: 0.0,
+        },
+    )));
+
+    return HitableList{hitables: hitables};
+}
+
 fn render() -> (u32, u32, Vec<u8>) {
-    let nx = 800;
-    let ny = 400;
+    let nx = 2000;
+    let ny = 1000;
 
     let ns = 100; // samples
 
     let r = (PI/4.0).cos();
 
-    let world = HitableList{
+    let world1 = HitableList{
         hitables: vec![
             /*
             Box::new(Sphere::new(
@@ -453,10 +549,12 @@ fn render() -> (u32, u32, Vec<u8>) {
         ],
     };
 
-    let lookfrom = Vec3::new(3.0, 3.0, 2.0);
-    let lookat = Vec3::new(0.0, 0.0, -1.0);
-    let dist_to_focus = (lookfrom - lookat).length();
-    let aperture = 2.0;
+    let world = random_sceme();
+
+    let lookfrom = Vec3::new(13.0, 2.0, 3.0);
+    let lookat = Vec3::new(0.0, 0.0, 0.0);
+    let dist_to_focus = 10.0;
+    let aperture = 0.1;
     let cam = Camera::new(
         lookfrom,
         lookat,
