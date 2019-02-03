@@ -2,6 +2,7 @@ extern crate png;
 extern crate rand;
 extern crate rayon;
 
+use core::f64::consts::PI;
 use std::f64;
 use std::fs::File;
 use std::io::BufWriter;
@@ -318,17 +319,27 @@ struct Camera {
 }
 
 impl Camera {
-    fn new() -> Self {
+    fn new(lookfrom: Vec3, lookat: Vec3, vup: Vec3, vfov: f64, aspect: f64) -> Self {
+        let theta = vfov * PI / 180.0;
+        let half_height = (theta/2.0).tan();
+        let half_width = aspect * half_height;
+
+        let w = (lookfrom - lookat).make_unit_vector();
+        let u = vup.cross(w).make_unit_vector();
+        let v = w.cross(u);
+
+        let origin = lookfrom;
+
         Camera {
-            origin: Vec3::new(0.0, 0.0, 0.0),
-            lower_left_corner: Vec3::new(-2.0, -1.0, -1.0),
-            horizontal: Vec3::new(4.0, 0.0, 0.0),
-            vertical: Vec3::new(0.0, 2.0, 0.0),
+            origin: origin,
+            lower_left_corner: origin - u.mul(half_width) - v.mul(half_height) - w,
+            horizontal: u.mul(2.0 * half_width),
+            vertical: v.mul(2.0 * half_height),
         }
     }
 
     fn get_ray(&self, u: f64, v: f64) -> Ray {
-        let direction = self.lower_left_corner + self.horizontal.mul(u) + self.vertical.mul(v);
+        let direction = self.lower_left_corner + self.horizontal.mul(u) + self.vertical.mul(v) - self.origin;
         Ray::new(self.origin, direction)
     }
 }
@@ -352,15 +363,28 @@ fn render() -> (u32, u32, Vec<u8>) {
     let nx = 800;
     let ny = 400;
 
-    let ns = 100; // samples
+    let ns = 1000; // samples
 
-    let lower_left_corner = Vec3::new(-2.0, -1.0, -1.0);
-    let horizontal = Vec3::new(4.0, 0.0, 0.0);
-    let vertical = Vec3::new(0.0, 2.0, 0.0);
-    let origin = Vec3::new(0.0, 0.0, 0.0);
+    let r = (PI/4.0).cos();
 
     let world = HitableList{
         hitables: vec![
+            /*
+            Box::new(Sphere::new(
+                Vec3::new(-r, 0.0, -1.0),
+                r,
+                Material::Lambertian{
+                   albedo: Vec3::new(0.0, 0.0, 1.0),
+                },
+            )),
+            Box::new(Sphere::new(
+                Vec3::new(r, 0.0, -1.0),
+                r,
+                Material::Lambertian{
+                   albedo: Vec3::new(1.0, 0.0, 0.0),
+                },
+            )),
+             */
             Box::new(Sphere::new(
                 Vec3::new(0.0, 0.0, -1.0),
                 0.5,
@@ -400,7 +424,13 @@ fn render() -> (u32, u32, Vec<u8>) {
         ],
     };
 
-    let cam = Camera::new();
+    let cam = Camera::new(
+        Vec3::new(-2.0, 2.0, 1.0),
+        Vec3::new(0.0, 0.0, -1.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        30.0,
+        nx as f64 / ny as f64,
+    );
 
     let image = (0..ny).into_par_iter().map(|j| {
         let mut rng = rand::thread_rng();
