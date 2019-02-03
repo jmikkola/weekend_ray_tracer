@@ -1,4 +1,5 @@
 extern crate png;
+extern crate rand;
 
 use std::f64;
 use std::fs::File;
@@ -8,6 +9,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use png::HasParameters;
+use rand::prelude::*;
 
 #[derive(Copy, Clone)]
 struct Vec3 {
@@ -73,6 +75,12 @@ impl ops::Add for Vec3 {
 
     fn add(self, rhs: Self) -> Self {
         Vec3 { x: self.x + rhs.x, y: self.y + rhs.y, z: self.z + rhs.z, }
+    }
+}
+
+impl ops::AddAssign for Vec3 {
+    fn add_assign(&mut self, other: Vec3) {
+        *self = *self + other
     }
 }
 
@@ -199,6 +207,29 @@ impl Hitable for HitableList {
     }
 }
 
+struct Camera {
+    origin: Vec3,
+    lower_left_corner: Vec3,
+    horizontal: Vec3,
+    vertical: Vec3,
+}
+
+impl Camera {
+    fn new() -> Self {
+        Camera {
+            origin: Vec3::new(0.0, 0.0, 0.0),
+            lower_left_corner: Vec3::new(-2.0, -1.0, -1.0),
+            horizontal: Vec3::new(4.0, 0.0, 0.0),
+            vertical: Vec3::new(0.0, 2.0, 0.0),
+        }
+    }
+
+    fn get_ray(&self, u: f64, v: f64) -> Ray {
+        let direction = self.lower_left_corner + self.horizontal.mul(u) + self.vertical.mul(v);
+        Ray::new(self.origin, direction)
+    }
+}
+
 fn color<T>(r: Ray, world: &T) -> Vec3 where T: Hitable {
     if let Some(hit) = &world.hit(r, 0.0, f64::MAX) {
         hit.normal.add(1.0).mul(0.5)
@@ -212,6 +243,8 @@ fn color<T>(r: Ray, world: &T) -> Vec3 where T: Hitable {
 fn render() -> (u32, u32, Vec<u8>) {
     let nx = 400;
     let ny = 200;
+
+    let ns = 100; // samples
 
     let mut image = vec![];
 
@@ -227,14 +260,27 @@ fn render() -> (u32, u32, Vec<u8>) {
         ],
     };
 
+    let cam = Camera::new();
+
+    let mut rng = rand::thread_rng();
+
     for j in (0..ny).rev() {
         for i in 0..nx {
-            let u = i as f64 / nx as f64;
-            let v = j as f64 / ny as f64;
-            let r = Ray::new(origin, lower_left_corner + horizontal.mul(u) + vertical.mul(v));
-            let col = color(r, &world);
 
-            let col2 = col.mul(255.99);
+            let mut col = Vec3::new(0.0, 0.0, 0.0);
+
+            for _ in 0..ns {
+                let ir: f64 = rng.gen();
+                let jr: f64 = rng.gen();
+                let u = (i as f64 + ir) / nx as f64;
+                let v = (j as f64 + jr) / ny as f64;
+                let r = cam.get_ray(u, v);
+                let p = r.point_at_parameter(2.0);
+
+                col += color(r, &world);
+            }
+
+            let col2 = col.div(ns as f64).mul(255.99);
 
             image.push(col2.x as u8);
             image.push(col2.y as u8);
