@@ -120,6 +120,10 @@ fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
     }
 }
 
+fn reflect(v: Vec3, n: Vec3) -> Vec3 {
+    v - n.mul(2.0 * v.dot(n))
+}
+
 #[derive(Clone, Copy)]
 struct Ray {
     a: Vec3,
@@ -144,26 +148,26 @@ impl Ray {
     }
 }
 
-#[derive(Clone, Copy)]
 struct HitRecord {
     t: f64,
     p: Vec3,
     normal: Vec3,
+    material: Material,
 }
 
 trait Hitable {
     fn hit(&self, r: Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
 }
 
-#[derive(Clone)]
 struct Sphere {
     center: Vec3,
     radius: f64,
+    material: Material,
 }
 
 impl Sphere {
-    fn new(center: Vec3, radius: f64) -> Self {
-        Sphere { center: center, radius: radius }
+    fn new(center: Vec3, radius: f64, material: Material) -> Self {
+        Sphere { center: center, radius: radius, material: material, }
     }
 }
 
@@ -182,6 +186,7 @@ impl Hitable for Sphere {
                     t: t1,
                     p: p,
                     normal: (p - self.center).div(self.radius),
+                    material: self.material,
                 });
             }
 
@@ -192,6 +197,7 @@ impl Hitable for Sphere {
                     t: t2,
                     p: p,
                     normal: (p - self.center).div(self.radius),
+                    material: self.material,
                 });
             }
         }
@@ -218,6 +224,34 @@ impl Hitable for HitableList {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Material {
+    Lambertian {
+        albedo: Vec3,
+    },
+    Metal {
+        albedo: Vec3,
+    },
+}
+
+impl Material {
+    fn scatter(&self, r_in: Ray, hit: &HitRecord, rng: &mut ThreadRng) -> (Vec3, Ray, bool) {
+        match self {
+            Material::Lambertian{albedo} => {
+                let target = hit.p + hit.normal + random_in_unit_sphere(rng);
+                let scattered = Ray::new(hit.p, target - hit.p);
+                (*albedo, scattered, true)
+            },
+            Material::Metal{albedo} => {
+                let reflected = reflect(r_in.direction().make_unit_vector(), hit.normal);
+                let scattered = Ray::new(hit.p, reflected);
+                let b = scattered.direction().dot(hit.normal) > 0.0;
+                (*albedo, scattered, b)
+            },
+        }
+    }
+}
+
 struct Camera {
     origin: Vec3,
     lower_left_corner: Vec3,
@@ -241,11 +275,14 @@ impl Camera {
     }
 }
 
-fn color<T>(r: Ray, world: &T, rng: &mut ThreadRng) -> Vec3 where T: Hitable {
+fn color<T>(r: Ray, world: &T, depth: u32, rng: &mut ThreadRng) -> Vec3 where T: Hitable {
     if let Some(hit) = &world.hit(r, 0.001, f64::MAX) {
-        let target = hit.p + hit.normal + random_in_unit_sphere(rng);
-        let r = Ray::new(hit.p, target - hit.p);
-        color(r, world, rng).mul(0.5)
+        let (attenuation, scattered, b) = hit.material.scatter(r, hit, rng);
+        if depth < 50 && b {
+            return attenuation * color(scattered, world, depth + 1, rng);
+        } else {
+            return Vec3::new(0.0, 0.0, 0.0);
+        }
     } else {
         let unit_direction = r.direction().make_unit_vector();
         let t = 0.5 * (unit_direction.y + 1.0);
@@ -268,8 +305,34 @@ fn render() -> (u32, u32, Vec<u8>) {
 
     let world = HitableList{
         hitables: vec![
-            Box::new(Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5)),
-            Box::new(Sphere::new(Vec3::new(0.0, -100.5, -1.0), 100.)),
+            Box::new(Sphere::new(
+                Vec3::new(0.0, 0.0, -1.0),
+                0.5,
+                Material::Lambertian{
+                   albedo: Vec3::new(0.8, 0.3, 0.3),
+                },
+            )),
+            Box::new(Sphere::new(
+                Vec3::new(0.0, -100.5, -1.0),
+                100.0,
+                Material::Lambertian{
+                   albedo: Vec3::new(0.8, 0.8, 0.0),
+                },
+            )),
+            Box::new(Sphere::new(
+                Vec3::new(1.0, 0.0, -1.0),
+                0.5,
+                Material::Metal{
+                   albedo: Vec3::new(0.8, 0.6, 0.2),
+                },
+            )),
+            Box::new(Sphere::new(
+                Vec3::new(-1.0, 0.0, -1.0),
+                0.5,
+                Material::Metal{
+                   albedo: Vec3::new(0.8, 0.8, 0.8),
+                },
+            )),
         ],
     };
 
@@ -290,7 +353,7 @@ fn render() -> (u32, u32, Vec<u8>) {
                 let r = cam.get_ray(u, v);
                 let p = r.point_at_parameter(2.0);
 
-                col += color(r, &world, &mut rng);
+                col += color(r, &world, 0, &mut rng);
             }
 
             let col2 = col.div(ns as f64);
