@@ -84,6 +84,31 @@ impl ops::Div for Vec3 {
 }
 
 
+#[derive(Clone, Copy)]
+struct Ray {
+    a: Vec3,
+    b: Vec3,
+}
+
+impl Ray {
+    fn new(a: Vec3, b: Vec3) -> Self {
+        Ray { a: a, b: b }
+    }
+
+    fn origin(self) -> Vec3 {
+        self.a
+    }
+
+    fn direction(self) -> Vec3 {
+        self.b
+    }
+
+    fn point_at_parameter(self, t: f64) -> Vec3 {
+        self.a + self.b.mul(t)
+    }
+}
+
+
 fn main() {
     let nx = 300;
     let ny = 100;
