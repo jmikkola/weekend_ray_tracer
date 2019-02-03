@@ -2,8 +2,8 @@ extern crate png;
 extern crate rand;
 extern crate rayon;
 
-use core::f64::consts::PI;
-use std::f64;
+use core::f32::consts::PI;
+use std::f32;
 use std::fs::File;
 use std::io::BufWriter;
 use std::ops;
@@ -16,27 +16,27 @@ use rayon::prelude::*;
 
 #[derive(Copy, Clone)]
 struct Vec3 {
-    x: f64,
-    y: f64,
-    z: f64,
+    x: f32,
+    y: f32,
+    z: f32,
 }
 
 impl Vec3 {
-    fn new(x: f64, y: f64, z: f64) -> Self {
+    fn new(x: f32, y: f32, z: f32) -> Self {
         Vec3 { x: x, y: y, z: z }
     }
 
-    fn new_uniform(val: f64) -> Self {
+    fn new_uniform(val: f32) -> Self {
         Self::new(val, val, val)
     }
 
-    fn squared_length(self) -> f64 {
+    fn squared_length(self) -> f32 {
         self.x * self.x +
             self.y * self.y +
             self.z * self.z
     }
 
-    fn length(self) -> f64 {
+    fn length(self) -> f32 {
         self.squared_length().sqrt()
     }
 
@@ -44,23 +44,23 @@ impl Vec3 {
         self / Self::new_uniform(self.length())
     }
 
-    fn unit_vector(val: f64) -> Self {
+    fn unit_vector(val: f32) -> Self {
         Self::new_uniform(val).make_unit_vector()
     }
 
-    fn add(self, val: f64) -> Self {
+    fn add(self, val: f32) -> Self {
         self + Self::new_uniform(val)
     }
 
-    fn mul(self, val: f64) -> Self {
+    fn mul(self, val: f32) -> Self {
         self * Self::new_uniform(val)
     }
 
-    fn div(self, val: f64) -> Self {
+    fn div(self, val: f32) -> Self {
         self / Self::new_uniform(val)
     }
 
-    fn dot(self, v2: Self) -> f64 {
+    fn dot(self, v2: Self) -> f32 {
         self.x * v2.x + self.y * v2.y + self.z * v2.z
     }
 
@@ -113,9 +113,9 @@ impl ops::Div for Vec3 {
 
 fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
     loop {
-        let x: f64 = rng.gen();
-        let y: f64 = rng.gen();
-        let z: f64 = rng.gen();
+        let x: f32 = rng.gen();
+        let y: f32 = rng.gen();
+        let z: f32 = rng.gen();
         let p = Vec3::new(x, y, z).mul(2.0) - Vec3::new_uniform(1.0);
         if p.squared_length() < 1.0 {
             return p;
@@ -125,8 +125,8 @@ fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
 
 fn random_in_unit_disk(rng: &mut ThreadRng) -> Vec3 {
     loop {
-        let r1: f64 = rng.gen();
-        let r2: f64 = rng.gen();
+        let r1: f32 = rng.gen();
+        let r2: f32 = rng.gen();
         let p = Vec3::new(r1, r2, 0.0).mul(2.0) - Vec3::new(1.0, 1.0, 0.0);
         if p.dot(p) >= 1.0 {
             return p;
@@ -143,7 +143,7 @@ fn reflect(v: Vec3, n: Vec3) -> Vec3 {
     v - n.mul(2.0 * v.dot(n))
 }
 
-fn refract(v: Vec3, n: Vec3, ni_over_nt: f64) -> Option<Vec3> {
+fn refract(v: Vec3, n: Vec3, ni_over_nt: f32) -> Option<Vec3> {
     let uv = v.make_unit_vector();
     let dt = uv.dot(n);
     let discriminant = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt*dt);
@@ -173,36 +173,36 @@ impl Ray {
         self.b
     }
 
-    fn point_at_parameter(self, t: f64) -> Vec3 {
+    fn point_at_parameter(self, t: f32) -> Vec3 {
         self.a + self.b.mul(t)
     }
 }
 
 struct HitRecord {
-    t: f64,
+    t: f32,
     p: Vec3,
     normal: Vec3,
     material: Material,
 }
 
 trait Hitable {
-    fn hit(&self, r: Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
+    fn hit(&self, r: Ray, t_min: f32, t_max: f32) -> Option<HitRecord>;
 }
 
 struct Sphere {
     center: Vec3,
-    radius: f64,
+    radius: f32,
     material: Material,
 }
 
 impl Sphere {
-    fn new(center: Vec3, radius: f64, material: Material) -> Self {
+    fn new(center: Vec3, radius: f32, material: Material) -> Self {
         Sphere { center: center, radius: radius, material: material, }
     }
 }
 
 impl Hitable for Sphere {
-    fn hit(&self, r: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+    fn hit(&self, r: Ray, t_min: f32, t_max: f32) -> Option<HitRecord> {
         let oc = r.origin() - self.center;
         let a = r.direction().dot(r.direction());
         let b = oc.dot(r.direction());
@@ -244,7 +244,7 @@ unsafe impl Sync for HitableList {
 }
 
 impl Hitable for HitableList {
-    fn hit(&self, r: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+    fn hit(&self, r: Ray, t_min: f32, t_max: f32) -> Option<HitRecord> {
         let mut closest_so_far = t_max;
         let mut closest_hit = None;
         for ref item in &self.hitables {
@@ -264,14 +264,14 @@ enum Material {
     },
     Metal {
         albedo: Vec3,
-        fuzz: f64,
+        fuzz: f32,
     },
     Dielectrict {
-        ref_idx: f64,
+        ref_idx: f32,
     },
 }
 
-fn schlick(cosine: f64, ref_idx: f64) -> f64 {
+fn schlick(cosine: f32, ref_idx: f32) -> f32 {
     let r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
     let r1 = r0 * r0;
     r1 + (1.0 - r1) * (1.0 - cosine).powf(5.0)
@@ -312,7 +312,7 @@ impl Material {
 
                 if let Some(refracted) = refract(r_in.direction(), outward_normal, ni_over_nt) {
                     let reflect_prob = schlick(cosine, *ref_idx);
-                    let rn: f64 = rng.gen();
+                    let rn: f32 = rng.gen();
                     let scattered = if rn < reflect_prob {
                         Ray::new(hit.p, reflected)
                     } else {
@@ -336,11 +336,11 @@ struct Camera {
     v: Vec3,
     w: Vec3,
 
-    lens_radius: f64,
+    lens_radius: f32,
 }
 
 impl Camera {
-    fn new(lookfrom: Vec3, lookat: Vec3, vup: Vec3, vfov: f64, aspect: f64, aperture: f64, focus_dist: f64) -> Self {
+    fn new(lookfrom: Vec3, lookat: Vec3, vup: Vec3, vfov: f32, aspect: f32, aperture: f32, focus_dist: f32) -> Self {
         let theta = vfov * PI / 180.0;
         let half_height = (theta/2.0).tan();
         let half_width = aspect * half_height;
@@ -365,7 +365,7 @@ impl Camera {
         }
     }
 
-    fn get_ray(&self, s: f64, t: f64, rng: &mut ThreadRng) -> Ray {
+    fn get_ray(&self, s: f32, t: f32, rng: &mut ThreadRng) -> Ray {
         let rd = random_in_unit_disk2(rng).mul(self.lens_radius);
         let offset = self.u.mul(rd.x) + self.v.mul(rd.y);
         let direction = self.lower_left_corner + self.horizontal.mul(s) + self.vertical.mul(t) - self.origin - offset;
@@ -374,7 +374,7 @@ impl Camera {
 }
 
 fn color<T>(r: Ray, world: &T, depth: u32, rng: &mut ThreadRng) -> Vec3 where T: Hitable {
-    if let Some(hit) = &world.hit(r, 0.001, f64::MAX) {
+    if let Some(hit) = &world.hit(r, 0.001, f32::MAX) {
         let (attenuation, scattered, b) = hit.material.scatter(r, hit, rng);
         if depth < 10 && b {
             return attenuation * color(scattered, world, depth + 1, rng);
@@ -388,8 +388,8 @@ fn color<T>(r: Ray, world: &T, depth: u32, rng: &mut ThreadRng) -> Vec3 where T:
     }
 }
 
-fn gen64(rng: &mut ThreadRng) -> f64 {
-    let r: f64 = rng.gen();
+fn gen64(rng: &mut ThreadRng) -> f32 {
+    let r: f32 = rng.gen();
     r
 }
 
@@ -409,11 +409,11 @@ fn random_sceme() -> HitableList {
 
     for a in -11..11 {
         for b in -11..11 {
-            let choose_mat: f64 = rng.gen();
+            let choose_mat: f32 = rng.gen();
             let center = Vec3::new(
-                a as f64 + 0.9 + gen64(&mut rng),
+                a as f32 + 0.9 + gen64(&mut rng),
                 0.2,
-                b as f64 + 0.9 * gen64(&mut rng),
+                b as f32 + 0.9 * gen64(&mut rng),
             );
 
             if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
@@ -560,7 +560,7 @@ fn render() -> (u32, u32, Vec<u8>) {
         lookat,
         Vec3::new(0.0, 1.0, 0.0),
         20.0,
-        nx as f64 / ny as f64,
+        nx as f32 / ny as f32,
         aperture,
         dist_to_focus,
     );
@@ -573,17 +573,17 @@ fn render() -> (u32, u32, Vec<u8>) {
             let mut col = Vec3::new(0.0, 0.0, 0.0);
 
             for _ in 0..ns {
-                let ir: f64 = rng.gen();
-                let jr: f64 = rng.gen();
-                let u = (i as f64 + ir) / nx as f64;
-                let v = (j as f64 + jr) / ny as f64;
+                let ir: f32 = rng.gen();
+                let jr: f32 = rng.gen();
+                let u = (i as f32 + ir) / nx as f32;
+                let v = (j as f32 + jr) / ny as f32;
                 let r = cam.get_ray(u, v, &mut rng);
                 let p = r.point_at_parameter(2.0);
 
                 col += color(r, &world, 0, &mut rng);
             }
 
-            let col2 = col.div(ns as f64);
+            let col2 = col.div(ns as f32);
 
             row.push((col2.x.sqrt() * 255.99) as u8);
             row.push((col2.y.sqrt() * 255.99) as u8);
