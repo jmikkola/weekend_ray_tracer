@@ -249,6 +249,12 @@ enum Material {
     },
 }
 
+fn schlick(cosine: f64, ref_idx: f64) -> f64 {
+    let r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
+    let r1 = r0 * r0;
+    r1 + (1.0 - r1) * (1.0 - cosine).powf(5.0)
+}
+
 impl Material {
     fn scatter(&self, r_in: Ray, hit: &HitRecord, rng: &mut ThreadRng) -> (Vec3, Ray, bool) {
         match self {
@@ -271,20 +277,28 @@ impl Material {
 
                 let mut outward_normal = Vec3::new_uniform(1.0);
                 let mut ni_over_nt = 0.0;
+                let mut cosine = 0.0;
                 if r_in.direction().dot(hit.normal) > 0.0 {
                     outward_normal = hit.normal.mul(-1.0);
                     ni_over_nt = *ref_idx;
+                    cosine = ref_idx * r_in.direction().dot(hit.normal) / r_in.direction().length();
                 } else {
                     outward_normal = hit.normal;
                     ni_over_nt = 1.0 / *ref_idx;
+                    cosine = -r_in.direction().dot(hit.normal) / r_in.direction().length();
                 }
 
                 if let Some(refracted) = refract(r_in.direction(), outward_normal, ni_over_nt) {
-                    let scattered = Ray::new(hit.p, refracted);
+                    let reflect_prob = schlick(cosine, *ref_idx);
+                    let rn: f64 = rng.gen();
+                    let scattered = if rn < reflect_prob {
+                        Ray::new(hit.p, reflected)
+                    } else {
+                        Ray::new(hit.p, refracted)
+                    };
                     (attenuation, scattered, true)
                 } else {
-                    let scattered = Ray::new(hit.p, reflected);
-                    (attenuation, scattered, false)
+                    (attenuation, Ray::new(hit.p, reflected), true)
                 }
             },
         }
@@ -330,8 +344,8 @@ fn color<T>(r: Ray, world: &T, depth: u32, rng: &mut ThreadRng) -> Vec3 where T:
 }
 
 fn render() -> (u32, u32, Vec<u8>) {
-    let nx = 400;
-    let ny = 200;
+    let nx = 800;
+    let ny = 400;
 
     let ns = 100; // samples
 
@@ -363,12 +377,19 @@ fn render() -> (u32, u32, Vec<u8>) {
                 0.5,
                 Material::Metal{
                     albedo: Vec3::new(0.8, 0.6, 0.2),
-                    fuzz: 0.1,
+                    fuzz: 0.3,
                 },
             )),
             Box::new(Sphere::new(
                 Vec3::new(-1.0, 0.0, -1.0),
                 0.5,
+                Material::Dielectrict{
+                    ref_idx: 1.5,
+                },
+            )),
+            Box::new(Sphere::new(
+                Vec3::new(-1.0, 0.0, -1.0),
+                -0.45,
                 Material::Dielectrict{
                     ref_idx: 1.5,
                 },
