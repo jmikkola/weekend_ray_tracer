@@ -124,6 +124,17 @@ fn reflect(v: Vec3, n: Vec3) -> Vec3 {
     v - n.mul(2.0 * v.dot(n))
 }
 
+fn refract(v: Vec3, n: Vec3, ni_over_nt: f64) -> Option<Vec3> {
+    let uv = v.make_unit_vector();
+    let dt = uv.dot(n);
+    let discriminant = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt*dt);
+    if discriminant > 0.0 {
+        Some((uv - n.mul(dt)).mul(ni_over_nt) - n.mul(discriminant.sqrt()))
+    } else {
+        None
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Ray {
     a: Vec3,
@@ -233,6 +244,9 @@ enum Material {
         albedo: Vec3,
         fuzz: f64,
     },
+    Dielectrict {
+        ref_idx: f64,
+    },
 }
 
 impl Material {
@@ -249,6 +263,29 @@ impl Material {
                 let scattered = Ray::new(hit.p, reflected + random_in_unit_sphere(rng).mul(*fuzz));
                 let b = scattered.direction().dot(hit.normal) > 0.0;
                 (*albedo, scattered, b)
+            },
+
+            Material::Dielectrict{ref_idx} => {
+                let reflected = reflect(r_in.direction(), hit.normal);
+                let attenuation = Vec3::new_uniform(1.0);
+
+                let mut outward_normal = Vec3::new_uniform(1.0);
+                let mut ni_over_nt = 0.0;
+                if r_in.direction().dot(hit.normal) > 0.0 {
+                    outward_normal = hit.normal.mul(-1.0);
+                    ni_over_nt = *ref_idx;
+                } else {
+                    outward_normal = hit.normal;
+                    ni_over_nt = 1.0 / *ref_idx;
+                }
+
+                if let Some(refracted) = refract(r_in.direction(), outward_normal, ni_over_nt) {
+                    let scattered = Ray::new(hit.p, refracted);
+                    (attenuation, scattered, true)
+                } else {
+                    let scattered = Ray::new(hit.p, reflected);
+                    (attenuation, scattered, false)
+                }
             },
         }
     }
@@ -311,7 +348,7 @@ fn render() -> (u32, u32, Vec<u8>) {
                 Vec3::new(0.0, 0.0, -1.0),
                 0.5,
                 Material::Lambertian{
-                   albedo: Vec3::new(0.8, 0.3, 0.3),
+                   albedo: Vec3::new(0.1, 0.2, 0.5),
                 },
             )),
             Box::new(Sphere::new(
@@ -326,15 +363,14 @@ fn render() -> (u32, u32, Vec<u8>) {
                 0.5,
                 Material::Metal{
                     albedo: Vec3::new(0.8, 0.6, 0.2),
-                    fuzz: 0.3,
+                    fuzz: 0.1,
                 },
             )),
             Box::new(Sphere::new(
                 Vec3::new(-1.0, 0.0, -1.0),
                 0.5,
-                Material::Metal{
-                    albedo: Vec3::new(0.8, 0.8, 0.8),
-                    fuzz: 1.0,
+                Material::Dielectrict{
+                    ref_idx: 1.5,
                 },
             )),
         ],
