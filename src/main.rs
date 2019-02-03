@@ -1,5 +1,13 @@
+extern crate png;
+
 use std::f64;
+use std::fs::File;
+use std::io::BufWriter;
 use std::ops;
+use std::path::Path;
+use std::time::SystemTime;
+
+use png::HasParameters;
 
 #[derive(Copy, Clone)]
 struct Vec3 {
@@ -201,13 +209,11 @@ fn color<T>(r: Ray, world: &T) -> Vec3 where T: Hitable {
     }
 }
 
-fn main() {
+fn render() -> (u32, u32, Vec<u8>) {
     let nx = 400;
     let ny = 200;
 
-    println!("P3");
-    println!("{} {}", nx, ny);
-    println!("255");
+    let mut image = vec![];
 
     let lower_left_corner = Vec3::new(-2.0, -1.0, -1.0);
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
@@ -229,7 +235,35 @@ fn main() {
             let col = color(r, &world);
 
             let col2 = col.mul(255.99);
-            println!("{} {} {}", col2.x as i64, col2.y as i64, col2.z as i64);
+
+            image.push(col2.x as u8);
+            image.push(col2.y as u8);
+            image.push(col2.z as u8);
+            image.push(255); // alpha
         }
     }
+
+    (nx, ny, image)
+}
+
+fn write_png(x: u32, y: u32, image: Vec<u8>, path: &Path) {
+    let file = File::create(path).unwrap();
+    let ref mut w = BufWriter::new(file);
+
+    let mut encoder = png::Encoder::new(w, x, y);
+    encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+
+    writer.write_image_data(&image[..]).unwrap();
+}
+
+fn main() {
+    let now_s = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let filename = format!("render_{}.png", now_s);
+    let path = Path::new(&filename);
+    let (x, y, image) = render();
+    write_png(x, y, image, &path);
 }
