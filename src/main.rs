@@ -108,6 +108,17 @@ impl ops::Div for Vec3 {
     }
 }
 
+fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
+    loop {
+        let x: f64 = rng.gen();
+        let y: f64 = rng.gen();
+        let z: f64 = rng.gen();
+        let p = Vec3::new(x, y, z).mul(2.0) - Vec3::new_uniform(1.0);
+        if p.squared_length() < 1.0 {
+            return p;
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 struct Ray {
@@ -230,9 +241,11 @@ impl Camera {
     }
 }
 
-fn color<T>(r: Ray, world: &T) -> Vec3 where T: Hitable {
+fn color<T>(r: Ray, world: &T, rng: &mut ThreadRng) -> Vec3 where T: Hitable {
     if let Some(hit) = &world.hit(r, 0.0, f64::MAX) {
-        hit.normal.add(1.0).mul(0.5)
+        let target = hit.p + hit.normal + random_in_unit_sphere(rng);
+        let r = Ray::new(hit.p, target - hit.p);
+        color(r, world, rng).mul(0.5)
     } else {
         let unit_direction = r.direction().make_unit_vector();
         let t = 0.5 * (unit_direction.y + 1.0);
@@ -277,7 +290,7 @@ fn render() -> (u32, u32, Vec<u8>) {
                 let r = cam.get_ray(u, v);
                 let p = r.point_at_parameter(2.0);
 
-                col += color(r, &world);
+                col += color(r, &world, &mut rng);
             }
 
             let col2 = col.div(ns as f64).mul(255.99);
