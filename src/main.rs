@@ -123,6 +123,22 @@ fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
     }
 }
 
+fn random_in_unit_disk(rng: &mut ThreadRng) -> Vec3 {
+    loop {
+        let r1: f64 = rng.gen();
+        let r2: f64 = rng.gen();
+        let p = Vec3::new(r1, r2, 0.0).mul(2.0) - Vec3::new(1.0, 1.0, 0.0);
+        if p.dot(p) >= 1.0 {
+            return p;
+        }
+    }
+}
+
+fn random_in_unit_disk2(rng: &mut ThreadRng) -> Vec3 {
+    let v = random_in_unit_disk(rng);
+    v * v
+}
+
 fn reflect(v: Vec3, n: Vec3) -> Vec3 {
     v - n.mul(2.0 * v.dot(n))
 }
@@ -316,10 +332,15 @@ struct Camera {
     lower_left_corner: Vec3,
     horizontal: Vec3,
     vertical: Vec3,
+    u: Vec3,
+    v: Vec3,
+    w: Vec3,
+
+    lens_radius: f64,
 }
 
 impl Camera {
-    fn new(lookfrom: Vec3, lookat: Vec3, vup: Vec3, vfov: f64, aspect: f64) -> Self {
+    fn new(lookfrom: Vec3, lookat: Vec3, vup: Vec3, vfov: f64, aspect: f64, aperture: f64, focus_dist: f64) -> Self {
         let theta = vfov * PI / 180.0;
         let half_height = (theta/2.0).tan();
         let half_width = aspect * half_height;
@@ -331,16 +352,24 @@ impl Camera {
         let origin = lookfrom;
 
         Camera {
+            lens_radius: aperture / 2.0,
+
+            u: u,
+            v: v,
+            w: w,
+
             origin: origin,
-            lower_left_corner: origin - u.mul(half_width) - v.mul(half_height) - w,
-            horizontal: u.mul(2.0 * half_width),
-            vertical: v.mul(2.0 * half_height),
+            lower_left_corner: origin - u.mul(half_width*focus_dist) - v.mul(half_height*focus_dist) - w.mul(focus_dist),
+            horizontal: u.mul(2.0 * half_width * focus_dist),
+            vertical: v.mul(2.0 * half_height * focus_dist),
         }
     }
 
-    fn get_ray(&self, u: f64, v: f64) -> Ray {
-        let direction = self.lower_left_corner + self.horizontal.mul(u) + self.vertical.mul(v) - self.origin;
-        Ray::new(self.origin, direction)
+    fn get_ray(&self, s: f64, t: f64, rng: &mut ThreadRng) -> Ray {
+        let rd = random_in_unit_disk2(rng).mul(self.lens_radius);
+        let offset = self.u.mul(rd.x) + self.v.mul(rd.y);
+        let direction = self.lower_left_corner + self.horizontal.mul(s) + self.vertical.mul(t) - self.origin - offset;
+        Ray::new(self.origin + offset, direction)
     }
 }
 
@@ -363,7 +392,7 @@ fn render() -> (u32, u32, Vec<u8>) {
     let nx = 800;
     let ny = 400;
 
-    let ns = 1000; // samples
+    let ns = 100; // samples
 
     let r = (PI/4.0).cos();
 
@@ -424,12 +453,18 @@ fn render() -> (u32, u32, Vec<u8>) {
         ],
     };
 
+    let lookfrom = Vec3::new(3.0, 3.0, 2.0);
+    let lookat = Vec3::new(0.0, 0.0, -1.0);
+    let dist_to_focus = (lookfrom - lookat).length();
+    let aperture = 2.0;
     let cam = Camera::new(
-        Vec3::new(-2.0, 2.0, 1.0),
-        Vec3::new(0.0, 0.0, -1.0),
+        lookfrom,
+        lookat,
         Vec3::new(0.0, 1.0, 0.0),
-        30.0,
+        20.0,
         nx as f64 / ny as f64,
+        aperture,
+        dist_to_focus,
     );
 
     let image = (0..ny).into_par_iter().map(|j| {
@@ -444,7 +479,7 @@ fn render() -> (u32, u32, Vec<u8>) {
                 let jr: f64 = rng.gen();
                 let u = (i as f64 + ir) / nx as f64;
                 let v = (j as f64 + jr) / ny as f64;
-                let r = cam.get_ray(u, v);
+                let r = cam.get_ray(u, v, &mut rng);
                 let p = r.point_at_parameter(2.0);
 
                 col += color(r, &world, 0, &mut rng);
