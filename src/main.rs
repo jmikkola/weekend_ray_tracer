@@ -231,6 +231,7 @@ enum Material {
     },
     Metal {
         albedo: Vec3,
+        fuzz: f64,
     },
 }
 
@@ -242,9 +243,10 @@ impl Material {
                 let scattered = Ray::new(hit.p, target - hit.p);
                 (*albedo, scattered, true)
             },
-            Material::Metal{albedo} => {
+
+            Material::Metal{albedo, fuzz} => {
                 let reflected = reflect(r_in.direction().make_unit_vector(), hit.normal);
-                let scattered = Ray::new(hit.p, reflected);
+                let scattered = Ray::new(hit.p, reflected + random_in_unit_sphere(rng).mul(*fuzz));
                 let b = scattered.direction().dot(hit.normal) > 0.0;
                 (*albedo, scattered, b)
             },
@@ -323,14 +325,16 @@ fn render() -> (u32, u32, Vec<u8>) {
                 Vec3::new(1.0, 0.0, -1.0),
                 0.5,
                 Material::Metal{
-                   albedo: Vec3::new(0.8, 0.6, 0.2),
+                    albedo: Vec3::new(0.8, 0.6, 0.2),
+                    fuzz: 0.3,
                 },
             )),
             Box::new(Sphere::new(
                 Vec3::new(-1.0, 0.0, -1.0),
                 0.5,
                 Material::Metal{
-                   albedo: Vec3::new(0.8, 0.8, 0.8),
+                    albedo: Vec3::new(0.8, 0.8, 0.8),
+                    fuzz: 1.0,
                 },
             )),
         ],
