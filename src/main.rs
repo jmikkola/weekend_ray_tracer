@@ -1,5 +1,6 @@
 extern crate png;
 extern crate rand;
+extern crate rayon;
 
 use std::f64;
 use std::fs::File;
@@ -10,6 +11,7 @@ use std::time::SystemTime;
 
 use png::HasParameters;
 use rand::prelude::*;
+use rayon::prelude::*;
 
 #[derive(Copy, Clone)]
 struct Vec3 {
@@ -221,6 +223,9 @@ struct HitableList {
     hitables: Vec<Box<Hitable>>,
 }
 
+unsafe impl Sync for HitableList {
+}
+
 impl Hitable for HitableList {
     fn hit(&self, r: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
         let mut closest_so_far = t_max;
@@ -349,8 +354,6 @@ fn render() -> (u32, u32, Vec<u8>) {
 
     let ns = 100; // samples
 
-    let mut image = vec![];
-
     let lower_left_corner = Vec3::new(-2.0, -1.0, -1.0);
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
     let vertical = Vec3::new(0.0, 2.0, 0.0);
@@ -399,11 +402,11 @@ fn render() -> (u32, u32, Vec<u8>) {
 
     let cam = Camera::new();
 
-    let mut rng = rand::thread_rng();
+    let image = (0..ny).into_par_iter().map(|j| {
+        let mut rng = rand::thread_rng();
+        let mut row = vec![];
 
-    for j in (0..ny).rev() {
         for i in 0..nx {
-
             let mut col = Vec3::new(0.0, 0.0, 0.0);
 
             for _ in 0..ns {
@@ -419,12 +422,17 @@ fn render() -> (u32, u32, Vec<u8>) {
 
             let col2 = col.div(ns as f64);
 
-            image.push((col2.x.sqrt() * 255.99) as u8);
-            image.push((col2.y.sqrt() * 255.99) as u8);
-            image.push((col2.z.sqrt() * 255.99) as u8);
-            image.push(255); // alpha
+            row.push((col2.x.sqrt() * 255.99) as u8);
+            row.push((col2.y.sqrt() * 255.99) as u8);
+            row.push((col2.z.sqrt() * 255.99) as u8);
+            row.push(255); // alpha
         }
-    }
+
+        return row;
+    })
+        .rev()
+        .flatten()
+        .collect();
 
     (nx, ny, image)
 }
