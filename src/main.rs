@@ -242,7 +242,7 @@ impl Camera {
 }
 
 fn color<T>(r: Ray, world: &T, rng: &mut ThreadRng) -> Vec3 where T: Hitable {
-    if let Some(hit) = &world.hit(r, 0.0, f64::MAX) {
+    if let Some(hit) = &world.hit(r, 0.001, f64::MAX) {
         let target = hit.p + hit.normal + random_in_unit_sphere(rng);
         let r = Ray::new(hit.p, target - hit.p);
         color(r, world, rng).mul(0.5)
@@ -293,11 +293,11 @@ fn render() -> (u32, u32, Vec<u8>) {
                 col += color(r, &world, &mut rng);
             }
 
-            let col2 = col.div(ns as f64).mul(255.99);
+            let col2 = col.div(ns as f64);
 
-            image.push(col2.x as u8);
-            image.push(col2.y as u8);
-            image.push(col2.z as u8);
+            image.push((col2.x.sqrt() * 255.99) as u8);
+            image.push((col2.y.sqrt() * 255.99) as u8);
+            image.push((col2.z.sqrt() * 255.99) as u8);
             image.push(255); // alpha
         }
     }
