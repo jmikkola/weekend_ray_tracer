@@ -393,7 +393,7 @@ fn gen64(rng: &mut ThreadRng) -> f32 {
     r
 }
 
-fn random_sceme() -> HitableList {
+fn random_scene() -> HitableList {
     let n = 500;
     let mut hitables: Vec<Box<Hitable>> = vec![
         Box::new(Sphere::new(
@@ -411,47 +411,49 @@ fn random_sceme() -> HitableList {
         for b in -11..11 {
             let choose_mat: f32 = rng.gen();
             let center = Vec3::new(
-                a as f32 + 0.9 + gen64(&mut rng),
+                a as f32 + 0.8 * gen64(&mut rng),
                 0.2,
-                b as f32 + 0.9 * gen64(&mut rng),
+                b as f32 + 0.8 * gen64(&mut rng),
             );
 
             if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
-                // diffuse
-                hitables.push(Box::new(Sphere::new(
-                    center,
-                    0.2,
-                    Material::Lambertian{
-                        albedo: Vec3::new(
-                            gen64(&mut rng) * gen64(&mut rng),
-                            gen64(&mut rng) * gen64(&mut rng),
-                            gen64(&mut rng) * gen64(&mut rng),
-                        ),
-                    },
-                )));
-            } else if choose_mat < 0.95 {
-                // metal
-                hitables.push(Box::new(Sphere::new(
-                    center,
-                    0.2,
-                    Material::Metal{
-                        albedo: Vec3::new(
-                            0.5 * (1.0 + gen64(&mut rng)),
-                            0.5 * (1.0 + gen64(&mut rng)),
-                            0.5 * (1.0 + gen64(&mut rng)),
-                        ),
-                        fuzz: 0.5 * gen64(&mut rng),
-                    },
-                )));
-            } else {
-                // glass
-                hitables.push(Box::new(Sphere::new(
-                    center,
-                    0.2,
-                    Material::Dielectrict{
-                        ref_idx: 1.5,
-                    },
-                )));
+                if choose_mat < 0.60 {
+                    // diffuse
+                    hitables.push(Box::new(Sphere::new(
+                        center,
+                        0.2,
+                        Material::Lambertian{
+                            albedo: Vec3::new(
+                                gen64(&mut rng) * gen64(&mut rng),
+                                gen64(&mut rng) * gen64(&mut rng),
+                                gen64(&mut rng) * gen64(&mut rng),
+                            ),
+                        },
+                    )));
+                } else if choose_mat < 0.90 {
+                    // metal
+                    hitables.push(Box::new(Sphere::new(
+                        center,
+                        0.2,
+                        Material::Metal{
+                            albedo: Vec3::new(
+                                0.5 * (1.0 + gen64(&mut rng)),
+                                0.5 * (1.0 + gen64(&mut rng)),
+                                0.5 * (1.0 + gen64(&mut rng)),
+                            ),
+                            fuzz: 0.5 * gen64(&mut rng),
+                        },
+                    )));
+                } else {
+                    // glass
+                    hitables.push(Box::new(Sphere::new(
+                        center,
+                        0.2,
+                        Material::Dielectrict{
+                            ref_idx: 1.5,
+                        },
+                    )));
+                }
             }
         }
     }
@@ -485,10 +487,10 @@ fn random_sceme() -> HitableList {
 }
 
 fn render() -> (u32, u32, Vec<u8>) {
-    let nx = 2000;
-    let ny = 1000;
+    let nx = 3440;
+    let ny = 1440;
 
-    let ns = 100; // samples
+    let ns = 400; // samples
 
     let r = (PI/4.0).cos();
 
@@ -549,7 +551,7 @@ fn render() -> (u32, u32, Vec<u8>) {
         ],
     };
 
-    let world = random_sceme();
+    let world = random_scene();
 
     let lookfrom = Vec3::new(13.0, 2.0, 3.0);
     let lookat = Vec3::new(0.0, 0.0, 0.0);
@@ -568,6 +570,8 @@ fn render() -> (u32, u32, Vec<u8>) {
     let image = (0..ny).into_par_iter().map(|j| {
         let mut rng = rand::thread_rng();
         let mut row = vec![];
+
+        println!("row {j}");
 
         for i in 0..nx {
             let mut col = Vec3::new(0.0, 0.0, 0.0);
